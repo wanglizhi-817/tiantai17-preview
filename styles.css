@@ -269,8 +269,8 @@ html,body{background:#fff}
   .hero-content .eyebrow{margin-bottom:10px}
   .hero h1{font-size:36px;line-height:1.12;min-height:86px;margin-bottom:12px}
   .hero-lead{font-size:14px;line-height:1.65;min-height:68px;margin-bottom:16px}
-  .hero-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .hero-actions .btn{min-height:46px;padding:9px 10px;gap:8px}
+  .hero-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+  .hero-actions .btn{min-width:0;min-height:46px;padding:9px 10px;gap:8px;font-size:13px;white-space:nowrap}
   .hero-points{display:none}
   .hero-controls{bottom:18px}
 }
@@ -295,3 +295,6 @@ html,body{background:#fff}
   .brand small{font-size:9px;letter-spacing:.16em;margin-top:4px}
   .footer-brand img{width:60px;height:60px}
 }
+
+/* Keep small laboratory guidance text readable at WCAG AA contrast. */
+.knowledge-note{color:#64747a}

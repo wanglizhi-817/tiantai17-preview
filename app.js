@@ -8,6 +8,28 @@ let activeProduct = null;
 let modalImageRequest = 0;
 const showAll = document.querySelector('#show-all');
 const productImagePreloads = new Map();
+const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+
+const productImageObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const image = entry.target;
+    productImageObserver.unobserve(image);
+    image.src = image.dataset.src;
+    delete image.dataset.src;
+  });
+}, { rootMargin:'320px 0px' }) : null;
+
+function observeProductImages() {
+  productImageObserver?.disconnect();
+  grid.querySelectorAll('img[data-src]').forEach(image => {
+    if (productImageObserver) productImageObserver.observe(image);
+    else {
+      image.src = image.dataset.src;
+      delete image.dataset.src;
+    }
+  });
+}
 
 const shortText = (text, length = 74) => text.length > length ? `${text.slice(0, length)}…` : text;
 const galleryThumbPath = src => src.replace('catalog/products/', 'catalog/gallery-thumbs/');
@@ -22,7 +44,7 @@ function renderProducts() {
   grid.innerHTML = shown.map((product, index) => `
     <article class="product-card">
       <button class="product-image" type="button" data-product="${product.id}" aria-label="查看${product.name}详情">
-        <img src="assets/${product.thumb}" alt="${product.name}白底产品图" width="500" height="400" loading="lazy" fetchpriority="low" decoding="async">
+        <img src="${transparentPixel}" data-src="assets/${product.thumb}" alt="${product.name}白底产品图" width="500" height="400" loading="lazy" fetchpriority="low" decoding="async">
         <span>查看详情与参数</span>
       </button>
       <div class="product-body">
@@ -35,6 +57,7 @@ function renderProducts() {
   empty.hidden = matched.length > 0;
   showAll.hidden = Boolean(query) || current !== 'all' || matched.length <= 12;
   showAll.textContent = expanded ? '收起产品列表 ↑' : `查看全部 ${products.length} 个产品系列 ↗`;
+  observeProductImages();
 }
 
 renderProducts();
@@ -213,9 +236,12 @@ document.querySelector('#selection-result').addEventListener('click', event => {
 
 let heroIndex = 0;
 let heroTimer;
+let heroRequest = 0;
 const hero = document.querySelector('.hero');
 const track = document.querySelector('#hero-track');
 const dots = [...document.querySelectorAll('.hero-dot')];
+const heroSlides = [...document.querySelectorAll('.hero-slide')];
+const heroLoads = new Map();
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const heroMessages = [
   { kicker:'TIANTAI INSTRUMENT', title:'天泰仪器', accent:'让每一次实验稳定可控', lead:'从样品干燥、恒温培养到加热处理与洁净操作，为实验室提供可靠的设备支持。' },
@@ -224,8 +250,31 @@ const heroMessages = [
   { kicker:'CLEAN WORK · CJ SERIES', title:'洁净操作', accent:'从稳定工作区开始', lead:'天泰 CJ 净化工作台，为生物制药、生物化学与环境监测提供局部洁净环境。' }
 ];
 
-function showHero(index) {
-  heroIndex = (index + dots.length) % dots.length;
+function loadHeroSlide(index) {
+  if (heroLoads.has(index)) return heroLoads.get(index);
+  const slide = heroSlides[index];
+  const image = slide?.querySelector('img[data-src]');
+  if (!image) return Promise.resolve();
+  const source = slide.querySelector('source[data-srcset]');
+  if (source) {
+    source.srcset = source.dataset.srcset;
+    delete source.dataset.srcset;
+  }
+  image.src = image.dataset.src;
+  delete image.dataset.src;
+  const ready = typeof image.decode === 'function'
+    ? image.decode().catch(() => {})
+    : new Promise(resolve => image.addEventListener('load', resolve, { once:true }));
+  heroLoads.set(index, ready);
+  return ready;
+}
+
+async function showHero(index) {
+  const nextIndex = (index + dots.length) % dots.length;
+  const request = ++heroRequest;
+  await loadHeroSlide(nextIndex);
+  if (request !== heroRequest) return;
+  heroIndex = nextIndex;
   const message = heroMessages[heroIndex];
   track.style.transform = `translateX(-${heroIndex * (100 / dots.length)}%)`;
   document.querySelector('#hero-kicker').textContent = message.kicker;
@@ -236,34 +285,49 @@ function showHero(index) {
     dot.classList.toggle('active', dotIndex === heroIndex);
     dot.setAttribute('aria-current', dotIndex === heroIndex ? 'true' : 'false');
   });
+  if (heroIndex > 0) {
+    const nextSlide = (heroIndex + 1) % dots.length;
+    setTimeout(() => loadHeroSlide(nextSlide), 250);
+  }
 }
 
 function startHero() {
-  clearInterval(heroTimer);
-  if (!reduceMotion.matches) heroTimer = setInterval(() => showHero(heroIndex + 1), 2500);
+  clearTimeout(heroTimer);
+  if (!reduceMotion.matches) heroTimer = setTimeout(async () => {
+    await showHero(heroIndex + 1);
+    startHero();
+  }, 2500);
 }
 
-document.querySelector('#hero-prev').addEventListener('click', () => { showHero(heroIndex - 1); startHero(); });
-document.querySelector('#hero-next').addEventListener('click', () => { showHero(heroIndex + 1); startHero(); });
-dots.forEach(dot => dot.addEventListener('click', () => { showHero(Number(dot.dataset.heroSlide)); startHero(); }));
-hero.addEventListener('mouseenter', () => clearInterval(heroTimer));
-hero.addEventListener('mouseleave', startHero);
-hero.addEventListener('focusin', () => clearInterval(heroTimer));
-hero.addEventListener('focusout', startHero);
-document.addEventListener('visibilitychange', () => document.hidden ? clearInterval(heroTimer) : startHero());
-showHero(0);
-startHero();
+async function selectHero(index) {
+  clearTimeout(heroTimer);
+  await showHero(index);
+  startHero();
+}
 
-const warmHeroSlides = () => {
-  document.querySelectorAll('.hero-slide img[loading="lazy"]').forEach((image, index) => {
-    setTimeout(() => {
-      image.fetchPriority = 'low';
-      image.loading = 'eager';
-    }, index * 180);
-  });
+document.querySelector('#hero-prev').addEventListener('click', () => selectHero(heroIndex - 1));
+document.querySelector('#hero-next').addEventListener('click', () => selectHero(heroIndex + 1));
+dots.forEach(dot => dot.addEventListener('click', () => selectHero(Number(dot.dataset.heroSlide))));
+hero.addEventListener('mouseenter', () => clearTimeout(heroTimer));
+hero.addEventListener('mouseleave', startHero);
+hero.addEventListener('focusin', () => clearTimeout(heroTimer));
+hero.addEventListener('focusout', startHero);
+document.addEventListener('visibilitychange', () => document.hidden ? clearTimeout(heroTimer) : startHero());
+showHero(0);
+if (document.readyState === 'complete') startHero();
+else window.addEventListener('load', startHero, { once:true });
+
+const warmHeroSlides = async () => {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const limitedConnection = connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || '');
+  if (!limitedConnection) await loadHeroSlide(1);
 };
-if ('requestIdleCallback' in window) requestIdleCallback(warmHeroSlides, { timeout:900 });
-else setTimeout(warmHeroSlides, 250);
+const scheduleHeroWarmup = () => {
+  if ('requestIdleCallback' in window) requestIdleCallback(warmHeroSlides, { timeout:1200 });
+  else setTimeout(warmHeroSlides, 350);
+};
+if (document.readyState === 'complete') scheduleHeroWarmup();
+else window.addEventListener('load', scheduleHeroWarmup, { once:true });
 
 const inquiry = document.querySelector('#inquiry-modal');
 const inquiryNeed = document.querySelector('#inquiry-form textarea[name="need"]');
@@ -401,7 +465,7 @@ const sceneObserver = new IntersectionObserver(entries => entries.forEach(entry 
     delete element._sceneLoader;
   };
   loader.src = element.dataset.scene;
-}), { rootMargin:'450px 0px' });
+}), { rootMargin:'250px 0px' });
 document.querySelectorAll('[data-scene]').forEach(item => sceneObserver.observe(item));
 
 document.addEventListener('keydown', event => {
