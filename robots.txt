@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tiantai-instrument-showcase.lizili0808.chatgpt.site/sitemap.xml
