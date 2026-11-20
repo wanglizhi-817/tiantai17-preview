@@ -305,21 +305,38 @@ document.querySelector('#inquiry-form').addEventListener('submit', async event =
 
 const toggle = document.querySelector('.nav-toggle');
 const nav = document.querySelector('.primary-nav');
+
+function closeMobileNav() {
+  if (!nav.classList.contains('open')) return;
+  nav.classList.remove('open');
+  toggle.setAttribute('aria-expanded', 'false');
+  syncMobileCta();
+}
+
 toggle.addEventListener('click', () => {
   const open = nav.classList.toggle('open');
   toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   syncMobileCta();
 });
 nav.querySelectorAll('a, button').forEach(link => link.addEventListener('click', () => {
-  nav.classList.remove('open');
-  toggle.setAttribute('aria-expanded', 'false');
-  syncMobileCta();
+  closeMobileNav();
 }));
+
+document.addEventListener('pointerdown', event => {
+  if (!nav.classList.contains('open')) return;
+  if (nav.contains(event.target) || toggle.contains(event.target)) return;
+  closeMobileNav();
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !nav.classList.contains('open')) return;
+  closeMobileNav();
+  toggle.focus();
+});
 
 window.addEventListener('resize', () => {
   if (window.innerWidth > 960) {
-    nav.classList.remove('open');
-    toggle.setAttribute('aria-expanded', 'false');
+    closeMobileNav();
   }
   syncMobileCta();
 });
