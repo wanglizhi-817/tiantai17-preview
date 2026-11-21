@@ -9,28 +9,6 @@ let modalImageRequest = 0;
 const showAll = document.querySelector('#show-all');
 const showAllLabel = showAll.querySelector('.show-all-label');
 const productImagePreloads = new Map();
-const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
-
-const productImageObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
-  entries.forEach(entry => {
-    if (!entry.isIntersecting) return;
-    const image = entry.target;
-    productImageObserver.unobserve(image);
-    image.src = image.dataset.src;
-    delete image.dataset.src;
-  });
-}, { rootMargin:'320px 0px' }) : null;
-
-function observeProductImages() {
-  productImageObserver?.disconnect();
-  grid.querySelectorAll('img[data-src]').forEach(image => {
-    if (productImageObserver) productImageObserver.observe(image);
-    else {
-      image.src = image.dataset.src;
-      delete image.dataset.src;
-    }
-  });
-}
 
 const shortText = (text, length = 74) => text.length > length ? `${text.slice(0, length)}…` : text;
 const galleryThumbPath = src => src.replace('catalog/products/', 'catalog/gallery-thumbs/');
@@ -45,7 +23,7 @@ function renderProducts() {
   grid.innerHTML = shown.map((product, index) => `
     <article class="product-card">
       <button class="product-image" type="button" data-product="${product.id}" aria-label="查看${product.name}详情">
-        <img src="${transparentPixel}" data-src="assets/${product.thumb}" alt="${product.name}白底产品图" width="500" height="400" loading="lazy" fetchpriority="low" decoding="async">
+        <img src="assets/${product.thumb}" alt="${product.name}白底产品图" width="500" height="400" loading="eager" fetchpriority="auto" decoding="async">
         <span>查看详情与参数</span>
       </button>
       <div class="product-body">
@@ -60,7 +38,6 @@ function renderProducts() {
   showAllLabel.textContent = expanded ? '收起产品列表' : `查看全部 ${products.length} 个产品系列`;
   showAll.classList.toggle('is-expanded', expanded);
   showAll.setAttribute('aria-expanded', String(expanded));
-  observeProductImages();
 }
 
 renderProducts();
@@ -449,27 +426,29 @@ const observer = new IntersectionObserver(entries => entries.forEach(entry => {
 }), { threshold:.08 });
 document.querySelectorAll('.reveal').forEach(item => observer.observe(item));
 
-const sceneObserver = new IntersectionObserver(entries => entries.forEach(entry => {
-  if (!entry.isIntersecting) return;
-  const element = entry.target;
-  sceneObserver.unobserve(element);
-  const loader = new Image();
-  element._sceneLoader = loader;
-  loader.decoding = 'async';
-  loader.fetchPriority = 'low';
-  loader.onload = async () => {
-    try { await loader.decode(); } catch {}
-    if (element.classList.contains('solution-card')) {
-      element.style.setProperty('--scene-image', `url("${element.dataset.scene}")`);
-    } else {
-      element.style.backgroundImage = `linear-gradient(rgba(0,58,64,.08),rgba(0,58,64,.12)),url("${element.dataset.scene}")`;
-    }
-    element.classList.add('scene-loaded');
-    delete element._sceneLoader;
-  };
-  loader.src = element.dataset.scene;
-}), { rootMargin:'250px 0px' });
-document.querySelectorAll('[data-scene]').forEach(item => sceneObserver.observe(item));
+function loadSceneImages() {
+  document.querySelectorAll('[data-scene]').forEach(element => {
+    const loader = new Image();
+    element._sceneLoader = loader;
+    loader.decoding = 'async';
+    loader.fetchPriority = 'auto';
+    loader.onload = async () => {
+      try { await loader.decode(); } catch {}
+      if (element.classList.contains('solution-card')) {
+        element.style.setProperty('--scene-image', `url("${element.dataset.scene}")`);
+      } else {
+        element.style.backgroundImage = `linear-gradient(rgba(0,58,64,.08),rgba(0,58,64,.12)),url("${element.dataset.scene}")`;
+      }
+      element.classList.add('scene-loaded');
+      delete element._sceneLoader;
+    };
+    loader.src = element.dataset.scene;
+  });
+}
+
+const scheduleSceneImages = () => setTimeout(loadSceneImages, 220);
+if (document.readyState === 'complete') scheduleSceneImages();
+else window.addEventListener('load', scheduleSceneImages, { once:true });
 
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
