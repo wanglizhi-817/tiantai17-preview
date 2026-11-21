@@ -7,6 +7,7 @@ let expanded = false;
 let activeProduct = null;
 let modalImageRequest = 0;
 const showAll = document.querySelector('#show-all');
+const showAllLabel = showAll.querySelector('.show-all-label');
 const productImagePreloads = new Map();
 const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
@@ -56,7 +57,9 @@ function renderProducts() {
     </article>`).join('');
   empty.hidden = matched.length > 0;
   showAll.hidden = Boolean(query) || current !== 'all' || matched.length <= 12;
-  showAll.textContent = expanded ? '收起产品列表 ↑' : `查看全部 ${products.length} 个产品系列 ↗`;
+  showAllLabel.textContent = expanded ? '收起产品列表' : `查看全部 ${products.length} 个产品系列`;
+  showAll.classList.toggle('is-expanded', expanded);
+  showAll.setAttribute('aria-expanded', String(expanded));
   observeProductImages();
 }
 
